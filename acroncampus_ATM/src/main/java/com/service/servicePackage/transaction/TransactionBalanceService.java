@@ -5,14 +5,15 @@ import com.entity.AtmMachine;
 import com.entity.TransactionLog;
 import com.service.interfacePackage.TransactionService;
 
-import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
 public class TransactionBalanceService implements TransactionService {
     private final ArrayList<Account> accountList = new ArrayList<>();
     private AtmMachine atmMachine;
-    private LocalDateTime timestamp; // 작업 시간
+    private static final DateTimeFormatter HISTORY_TIME_FORMAT =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     public TransactionBalanceService() {
     }
@@ -34,130 +35,125 @@ public class TransactionBalanceService implements TransactionService {
         this.accountList.add(account);
     }
 
-
-
-    //계좌 찾기
-    private Account findAccount(String accountNo){
-        for(Account account : accountList){
-            if(account.getAccountNo().equals(accountNo)){
+    // 계좌번호로 계좌 조회
+    private Account findAccount(String accountNo) {
+        for (Account account : accountList) {
+            if (account.getAccountNo().equals(accountNo)) {
                 return account;
             }
         }
         return null;
     }
 
-    // 잔액 증가
-    private void transactionBalance(Account account, boolean isPlus, long amount){
-        account.setBalance(account.getBalance() + amount);
-    }
-    // ATM 현금 증가&감소
-    private void atmAddCash(String type, boolean toAtm,long amount){
-        if(type.equals("recordWithdraw")){
-            atmMachine.withdrawCash(amount);
-        } else if( type.equals("recordDeposit")){
-            atmMachine.addCash(amount);
+    // 잔액이 0보다 작아지면 출금 또는 이체를 중단
+    private void validateBalance(Account account) throws Exception {
+        if (account.getBalance() < 0) {
+            throw new Exception("잔액이 부족합니다.");
         }
     }
 
-    //로그 기록(거래 시간 , 거래 후 잔액)
-    // TransactionLog 자료형으로 반환하고 이것을 list<String>에 추가
-    /*private TransactionLog transactionLogInfo(Account account,String type, long amount){
-        TransactionLog transactionLog = new TransactionLog(account.getAccountNo(), type, amount);
-        long afterBalance = account.getBalance();
-    }*/
-
-    private long isAccount(String accountNo){
-        return findAccount(accountNo).getBalance();
+    // 거래 시점의 계좌 상태를 로그 객체로 저장
+    private void recordTransaction(Account account, String type, long amount) {
+        TransactionLog transactionLog = new TransactionLog(
+                account.getAccountNo(),
+                type,
+                amount,
+                account.getBalance()
+        );
+        account.addTransactionLog(transactionLog);
     }
-    private void isAccount(String accountNo, long amount, int note, boolean isPlus, String type){
-        for (Account account : accountList) {
-            if (account.getAccountNo().equals(accountNo)) {
-                if (amount % note == 0) {
-                    if(isPlus == true){
-                        account.setBalance(account.getBalance() + amount);
-                        atmMachine.addCash(amount);
-                        recordTransaction(accountNo,type,amount);
-                    } else{
-                        account.setBalance(account.getBalance() - amount);
-                        atmMachine.addCash(amount);
-                        recordTransaction(accountNo,type,amount);
-                    }
-                } else {
-                    // 1000원 단위 입금만 허용
-                }
-            } else {
-                // 예외 처리
-            }
+
+    // 거래 유형을 사용자 표시 문자열로 변환
+    private String formatTransactionType(String type) {
+        if (type.equals("recordDeposit")) {
+            return "입금";
+        } else if (type.equals("recordWithdraw")) {
+            return "출금";
+        } else if (type.equals("recordTransferPlus")) {
+            return "이체받음";
+        } else if (type.equals("recordTransferMinus")) {
+            return "이체보냄";
         }
+        return type;
     }
 
+    // 로그 1건을 반환용 문자열로 변환
+    private String formatHistory(TransactionLog transactionLog) {
+        String amountPrefix =
+                (transactionLog.getTransactionType().equals("recordWithdraw")
+                        || transactionLog.getTransactionType().equals("recordTransferMinus")) ? "-" : "+";
+
+        return transactionLog.getTimestamp().format(HISTORY_TIME_FORMAT)
+                + " | "
+                + formatTransactionType(transactionLog.getTransactionType())
+                + " | "
+                + amountPrefix + transactionLog.getAmount()
+                + " | 잔액: "
+                + transactionLog.getBalanceAfter();
+    }
 
     @Override
     public long checkBalance(String accountNo) {
-        long balance = isAccount(accountNo);
-        return balance;
+        Account account = findAccount(accountNo);
+        return account.getBalance();
     }
 
     @Override
     public void deposit(String accountNo, long amount) {
-        isAccount(accountNo,amount,1000,true,"recordDeposit");
-
+        Account account = findAccount(accountNo);
+        if (amount % 1000 == 0) {
+            account.setBalance(account.getBalance() + amount);
+            atmMachine.addCash(amount);
+            recordTransaction(account, "recordDeposit", amount);
+        }
     }
 
     @Override
     public void withdraw(String accountNo, long amount) throws Exception {
-        isAccount(accountNo, amount, 10000, false, "recordWithdraw");
+        Account account = findAccount(accountNo);
+        if (amount % 10000 == 0) {
+            account.setBalance(account.getBalance() - amount);
+            validateBalance(account);
+            atmMachine.withdrawCash(amount);
+            recordTransaction(account, "recordWithdraw", amount);
+        }
     }
 
     @Override
     public void transfer(String fromAccountNo, String toAccountNo, long amount) throws Exception {
-        for (Account account : accountList) {
-            if (account.getAccountNo().equals(fromAccountNo)) {
-                account.setBalance(account.getBalance() - amount);
-                recordTransaction(fromAccountNo,"recordTransferMinus",amount);
-            } else {
-                // 예외 처리
-            }
-        }
-        for (Account account : accountList) {
-            if (account.getAccountNo().equals(toAccountNo)) {
-                account.setBalance(account.getBalance() + amount);
-                recordTransaction(toAccountNo,"recordTransferPlus",amount);
-            } else {
-                // 예외 처리
-            }
-        }
+        Account fromAccount = findAccount(fromAccountNo);
+        Account toAccount = findAccount(toAccountNo);
+
+        fromAccount.setBalance(fromAccount.getBalance() - amount);
+        validateBalance(fromAccount);
+        toAccount.setBalance(toAccount.getBalance() + amount);
+
+        recordTransaction(fromAccount, "recordTransferMinus", amount);
+        recordTransaction(toAccount, "recordTransferPlus", amount);
     }
 
     @Override
     public void recordTransaction(String accountNo, String type, long amount) {
-        String recordAccount;
-        /*type */
-        // 계좌번호 검증
-        for (Account account : accountList) {
-            if (account.getAccountNo().equals(accountNo)) {
-                long afterBalance = account.getBalance();
-                // type 검증 : [입금,계좌이체 받음](recordDeposit), [계좌이체 돈 보냄, 출금](recordWithdraw)
-                timestamp = LocalDateTime.now();
-                recordAccount = timestamp + " | " + accountNo + " | " + type + " | ";
-                if ((type.equals("recordWithdraw"))){
-                    recordAccount += "-" + amount +" | ";
-                } else if(type.equals("recordDeposit")) {
-                    recordAccount += "+" + amount;
-                } else   {
-                    //예외처리
-                }
-                recordAccount += afterBalance;
-                account.getAccountRecord().add(recordAccount);
-            } else {
-                // 예외 처리
-            }
-        }
-
+        Account account = findAccount(accountNo);
+        recordTransaction(account, type, amount);
     }
 
     @Override
     public List<String> getRecentHistory(String accountNo) {
-        return List.of();
+        Account account = findAccount(accountNo);
+        List<String> recentHistory = new ArrayList<>();
+
+        if (account == null) {
+            return recentHistory;
+        }
+
+        List<TransactionLog> accountRecord = account.getAccountRecord();
+
+        // 최신 기록이 먼저 오도록 뒤에서부터 역순으로 반환용 리스트 생성
+        for (int i = accountRecord.size() - 1; i >= 0; i--) {
+            recentHistory.add(formatHistory(accountRecord.get(i)));
+        }
+
+        return recentHistory;
     }
 }
