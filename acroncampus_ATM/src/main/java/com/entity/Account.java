@@ -17,7 +17,7 @@ public class Account {
     // 계좌 잠금 상태
     private boolean isLocked;
     // 계좌별 거래 내역
-    private final List<TransactionLog> accountRecord = new ArrayList<>();
+    private final List<TransactionLog> accountRecord = new ArrayList<>(); //영석이 만듦
     // 로그인 상태
     private boolean isLogined;
 
@@ -104,12 +104,12 @@ public class Account {
         isLocked = locked;
     }
 
-    public List<TransactionLog> getAccountRecord() {
+    public List<TransactionLog> getAccountRecord() { //영석이 만듦
         return accountRecord;
     }
 
     // 계좌 거래 내역에 로그 1건 추가
-    public void addTransactionLog(TransactionLog transactionLog) {
+    public void addTransactionLog(TransactionLog transactionLog) { //영석이 만듦
         this.accountRecord.add(transactionLog);
     }
 

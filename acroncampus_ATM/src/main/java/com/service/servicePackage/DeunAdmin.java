@@ -1,5 +1,6 @@
 package com.service.servicePackage;
 
+import com.data.FileDataManager;
 import com.entity.Account;
 import com.entity.AdminLog;
 import com.entity.AtmMachine;
@@ -17,17 +18,15 @@ public class DeunAdmin implements AdminService {
     private AtmMachine atmMachine;
     private List<Account> accounts;
     private TransactionBalanceService transactionBalanceService;
+    private final FileDataManager fileDataManager;
+    private final List<AdminLog> adminLogs;
 
-    public DeunAdmin() {
-        this.atmMachine = new AtmMachine(1000000000);  // 10억
-        this.accounts = new ArrayList<>();
-    }
-
-    public DeunAdmin(AtmMachine atmMachine, List<Account> accounts,
-                     TransactionBalanceService transactionBalanceService) {
+    public DeunAdmin(AtmMachine atmMachine, List<Account> accounts, TransactionBalanceService transactionBalanceService, FileDataManager fileDataManager) {
         this.atmMachine = atmMachine;
         this.accounts = accounts;
         this.transactionBalanceService = transactionBalanceService;
+        this.fileDataManager = fileDataManager;
+        this.adminLogs = fileDataManager.loadAdminLogs();
     }
 
     // 6.1 ATM 기기 내 총 현금 잔고 확인
@@ -41,6 +40,8 @@ public class DeunAdmin implements AdminService {
     public void addAtmCash(long amount) {   // 기계의 돈 채우기 2
          atmMachine.addCash(amount);
          recordAdminLog( "현금추가", amount, LocalDateTime.now());
+         fileDataManager.saveAtmMachine(atmMachine);
+         fileDataManager.saveAdminLogs(this.adminLogs);
          System.out.println("현재 ATM 총금액 : " + atmMachine.getTotalCash() + " 원");
     }
 
@@ -49,6 +50,8 @@ public class DeunAdmin implements AdminService {
     public void withdrawAtmCash(long amount) {  // 기계의 돈 빼기 3
         atmMachine.withdrawCash(amount);
         recordAdminLog( "현금회수", amount, LocalDateTime.now());
+        fileDataManager.saveAtmMachine(atmMachine);
+        fileDataManager.saveAdminLogs(this.adminLogs);
         System.out.println("현재 ATM 총금액 : " + atmMachine.getTotalCash() + " 원");
     }
 
@@ -63,8 +66,6 @@ public class DeunAdmin implements AdminService {
             return false;
         }
     }
-
-    private final List<AdminLog> adminLogs = new ArrayList<>();
 
     public List<AdminLog> getAdminLogs() {
         return adminLogs;

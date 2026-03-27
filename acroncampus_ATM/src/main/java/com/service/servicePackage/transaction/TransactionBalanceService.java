@@ -1,5 +1,6 @@
 package com.service.servicePackage.transaction;
 
+import com.data.FileDataManager;
 import com.entity.Account;
 import com.entity.AtmMachine;
 import com.entity.TransactionLog;
@@ -10,28 +11,15 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class TransactionBalanceService implements TransactionService {
-    private final ArrayList<Account> accountList = new ArrayList<>();
+    private final List<Account> accountList;
     private AtmMachine atmMachine;
+    private final FileDataManager fileDataManager;
     private static final DateTimeFormatter HISTORY_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
-    public TransactionBalanceService() {
-    }
-
-    public TransactionBalanceService(Account account) {
-        this.accountList.add(account);
-    }
-
-    public TransactionBalanceService(ArrayList<Account> accountList) {
-        this.accountList.addAll(accountList);
-    }
-
-    public TransactionBalanceService(ArrayList<Account> accountList, AtmMachine atmMachine) {
-        this.accountList.addAll(accountList);
+    public TransactionBalanceService(List<Account> accountList, AtmMachine atmMachine, FileDataManager fileDataManager) {
+        this.accountList = accountList;
         this.atmMachine = atmMachine;
-    }
-
-    public void addAccount(Account account) {
-        this.accountList.add(account);
+        this.fileDataManager = fileDataManager;
     }
 
     // 계좌번호로 계좌 조회
@@ -106,6 +94,8 @@ public class TransactionBalanceService implements TransactionService {
             account.setBalance(account.getBalance() + amount);
             atmMachine.addCash(amount);
             recordTransaction(account, "recordDeposit", amount);
+            fileDataManager.saveAccounts(accountList);
+            fileDataManager.saveAtmMachine(atmMachine);
         }
     }
 
@@ -118,6 +108,8 @@ public class TransactionBalanceService implements TransactionService {
             validateBalance(account);
             atmMachine.withdrawCash(amount);
             recordTransaction(account, "recordWithdraw", amount);
+            fileDataManager.saveAccounts(accountList);
+            fileDataManager.saveAtmMachine(atmMachine);
         }
     }
 
@@ -133,6 +125,7 @@ public class TransactionBalanceService implements TransactionService {
 
         recordTransaction(fromAccount, "recordTransferMinus", amount);
         recordTransaction(toAccount, "recordTransferPlus", amount);
+        fileDataManager.saveAccounts(accountList);
     }
 
     // 5.1 입금/출금/이체 발생 시 시간, 금액, 거래 유형 기록

@@ -36,3 +36,6 @@ replay_pid*
 .idea/modules/acroncampus_ATM.iml
 .idea/modules/acroncampus_ATM.main.iml
 .idea/modules/acroncampus_ATM.test.iml
+acroncampus_ATM/data/accounts.json
+acroncampus_ATM/data/admin_logs.json
+acroncampus_ATM/data/atm_machine.json

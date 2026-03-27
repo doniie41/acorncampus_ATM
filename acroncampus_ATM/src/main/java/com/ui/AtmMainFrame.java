@@ -1,5 +1,6 @@
 package com.ui;
 
+import com.data.FileDataManager;
 import javax.swing.*;
 import java.awt.*;
 import com.entity.Account;
@@ -115,17 +116,21 @@ public class AtmMainFrame extends JFrame {
      * 서비스 객체들을 생성하고 서로의 의존성을 연결해주는 메서드
      */
     private void initServices() {
-        // 1. 인증 서비스 생성 및 샘플 계좌 데이터 초기화
-        this.accountAuthService = new AccountAuthServiceImp();
-        this.accountAuthService.initSampleAccounts();
+        // 0. 파일 관리를 위한 매니저 생성
+        FileDataManager fileDataManager = new FileDataManager();
 
-        // 2. 다른 서비스와 공유할 데이터(계좌 리스트, ATM 기기) 준비
+        // 1. 파일에서 ATM 기기 정보 로드 (없으면 기본값으로 생성)
+        this.atmMachine = fileDataManager.loadAtmMachine();
+
+        // 2. 인증 서비스 생성 (내부적으로 파일에서 계좌 정보를 로드하거나, 없으면 새로 생성 후 저장)
+        this.accountAuthService = new AccountAuthServiceImp(fileDataManager);
+
+        // 3. 다른 서비스와 공유할 데이터(계좌 리스트) 준비
         List<Account> accounts = this.accountAuthService.getAccounts();
-        this.atmMachine = new AtmMachine(1_000_000_000L); // 초기 자본금 10억
 
-        // 3. 거래 서비스와 관리자 서비스에 공유 데이터 주입
-        this.transactionService = new TransactionBalanceService((ArrayList<Account>) accounts, this.atmMachine);
-        this.adminService = new DeunAdmin(this.atmMachine, accounts, (TransactionBalanceService) this.transactionService);
+        // 4. 거래 서비스와 관리자 서비스에 공유 데이터 주입
+        this.transactionService = new TransactionBalanceService(accounts, this.atmMachine, fileDataManager);
+        this.adminService = new DeunAdmin(this.atmMachine, accounts, (TransactionBalanceService) this.transactionService, fileDataManager);
     }
 
     /**
